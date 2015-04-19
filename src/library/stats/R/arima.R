@@ -211,8 +211,10 @@ arima <- function(x, order = c(0L, 0L, 0L),
         if(fit$rank == 0L) {
             ## Degenerate model. Proceed anyway so as not to break old code
             fit <- lm(x ~ xreg - 1, na.action = na.omit)
+            n.used <- sum(!is.na(resid(fit))) - length(Delta)
+        } else {
+            n.used <- sum(!is.na(resid(fit)))
         }
-        n.used <- sum(!is.na(resid(fit))) - length(Delta)
         init0 <- c(init0, coef(fit))
         ses <- summary(fit)$coefficients[, 2L]
         parscale <- c(parscale, 10 * ses)
