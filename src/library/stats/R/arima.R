@@ -76,7 +76,8 @@ arima <- function(x, order = c(0L, 0L, 0L),
         if(ncxreg > 0) x <- x - xreg %*% par[narma + (1L:ncxreg)]
         res <- .Call(C_ARIMA_CSS, x, arma, trarma[[1L]], trarma[[2L]],
                      as.integer(ncond), FALSE)
-        0.5 * log(res)
+        s2 <- res[1L]/res[3L]
+        0.5 * log(s2)
     }
 
     arCheck <- function(ar)
@@ -143,7 +144,6 @@ arima <- function(x, order = c(0L, 0L, 0L),
         Delta <- Delta %+% c(1, rep.int(0, seasonal$period-1), -1)
     Delta <- - Delta[-1L]
     nd <- order[2L] + seasonal$order[2L]
-    n.used <- sum(!is.na(x)) - length(Delta)
     if (is.null(xreg)) {
         ncxreg <- 0L
     } else {
@@ -211,15 +211,11 @@ arima <- function(x, order = c(0L, 0L, 0L),
         if(fit$rank == 0L) {
             ## Degenerate model. Proceed anyway so as not to break old code
             fit <- lm(x ~ xreg - 1, na.action = na.omit)
-            n.used <- sum(!is.na(resid(fit))) - length(Delta)
-        } else {
-            n.used <- sum(!is.na(resid(fit)))
         }
         init0 <- c(init0, coef(fit))
         ses <- summary(fit)$coefficients[, 2L]
         parscale <- c(parscale, 10 * ses)
     }
-    if (n.used <= 0) stop("too few non-missing observations")
 
     if(!is.null(init)) {
         if(length(init) != length(init0))
@@ -259,7 +255,8 @@ arima <- function(x, order = c(0L, 0L, 0L),
         arimaSS(x, mod)
         val <- .Call(C_ARIMA_CSS, x, arma, trarma[[1L]], trarma[[2L]],
                      as.integer(ncond), TRUE)
-        sigma2 <- val[[1L]]
+        n.used <- val[[1L]][[3L]]
+        sigma2 <- val[[1L]][[1L]] / n.used
         var <- if(no.optim) numeric() else solve(res$hessian * n.used)
     } else {
         if(method == "CSS-ML") {
@@ -329,14 +326,16 @@ arima <- function(x, order = c(0L, 0L, 0L),
             ## stationarity region
             A <- .Call(C_ARIMA_Gradtrans, as.double(coef), arma)
             A <- A[mask, mask]
-	    var <- crossprod(A, solve(res$hessian * n.used, A))
+            var.unscaled  <- crossprod(A, solve(res$hessian, A))
             coef <- .Call(C_ARIMA_undoPars, coef, arma)
-        } else var <- if(no.optim) numeric() else solve(res$hessian * n.used)
+        } else var.unscaled <- if(no.optim) numeric() else solve(res$hessian)
         trarma <- .Call(C_ARIMA_transPars, coef, arma, FALSE)
 	mod <- makeARIMA(trarma[[1L]], trarma[[2L]], Delta, kappa, SSinit)
         val <- if(ncxreg > 0L)
             arimaSS(x - xreg %*% coef[narma + (1L:ncxreg)], mod)
         else arimaSS(x, mod)
+        n.used <- val[[1L]][[3L]]
+        var <- var.unscaled / n.used
         sigma2 <- val[[1L]][1L]/n.used
     }
     value <- 2 * n.used * res$value + n.used + n.used * log(2 * pi)

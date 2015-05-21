@@ -729,6 +729,9 @@ ARIMA_Like(SEXP sy, SEXP mod, SEXP sUP, SEXP giveResid)
 	}
     }
 
+    if (nu == 0)
+	error(_("too few non-missing observations"));
+
     if (useResid) {
 	PROTECT(res = allocVector(VECSXP, 3));
 	SET_VECTOR_ELT(res, 0, nres = allocVector(REALSXP, 3));
@@ -753,7 +756,7 @@ SEXP
 ARIMA_CSS(SEXP sy, SEXP sarma, SEXP sPhi, SEXP sTheta,
 	  SEXP sncond, SEXP giveResid)
 {
-    SEXP res, sResid = R_NilValue;
+    SEXP res, nres, sResid = R_NilValue;
     double ssq = 0.0, *y = REAL(sy), tmp;
     double *phi = REAL(sPhi), *theta = REAL(sTheta), *w, *resid;
     int n = LENGTH(sy), *arma = INTEGER(sarma), p = LENGTH(sPhi),
@@ -784,15 +787,26 @@ ARIMA_CSS(SEXP sy, SEXP sarma, SEXP sPhi, SEXP sTheta,
 	    ssq += tmp * tmp;
 	}
     }
+
+    if (nu == 0)
+	error(_("too few non-missing observations"));
+
     if (useResid) {
 	PROTECT(res = allocVector(VECSXP, 2));
-	SET_VECTOR_ELT(res, 0, ScalarReal(ssq / (double) (nu)));
+	SET_VECTOR_ELT(res, 0, nres = allocVector(REALSXP, 3));
+	REAL(nres)[0] = ssq;
+	REAL(nres)[1] = NA_REAL;
+	REAL(nres)[2] = (double) nu;
 	SET_VECTOR_ELT(res, 1, sResid);
 	UNPROTECT(2);
 	return res;
     } else {
-	UNPROTECT(1);
-	return ScalarReal(ssq / (double) (nu));
+	PROTECT(nres = allocVector(REALSXP, 3));
+	REAL(nres)[0] = ssq;
+	REAL(nres)[1] = NA_REAL;
+	REAL(nres)[2] = (double) nu;
+	UNPROTECT(2);
+	return nres;
     }
 }
 
